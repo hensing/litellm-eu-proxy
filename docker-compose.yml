@@ -1,0 +1,60 @@
+services:
+
+  # ── LiteLLM Proxy ─────────────────────────────────────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    # Port 4000 is intentionally not bound to the host.
+    # Nginx Proxy Manager reaches this container via the shared "proxy" network
+    # using the service name as hostname: http://litellm:4000
+    #
+    # For local testing without a reverse proxy, temporarily uncomment:
+    # ports:
+    #   - "127.0.0.1:4000:4000"
+    volumes:
+      - ./config/litellm_config.yaml:/app/config.yaml:ro
+    env_file:
+      - .env
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    networks:
+      - proxy           # shared with Nginx Proxy Manager
+      - internal        # isolated backend communication
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── PostgreSQL — required for virtual keys & cost tracking ────────────────────
+  # Enables per-user API keys, budget limits, and the LiteLLM management UI.
+  # Data is persisted in a named Docker volume.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - internal        # not exposed to NPM — only litellm needs to reach it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  proxy:
+    external: true      # must already exist — created by Nginx Proxy Manager
+  internal:
+    internal: true      # no external connectivity; used only for litellm ↔ postgres
+
+# Data directory ./data/postgres is created automatically on first start.
+# It is excluded from version control via .gitignore.

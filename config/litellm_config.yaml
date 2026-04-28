@@ -1,0 +1,57 @@
+model_list:
+
+  # ── LightOn ──────────────────────────────────────────────────────────────────
+  # LightOnOCR2: multilingual vision-language model optimised for document OCR.
+  # Primary endpoint for paperless-gpt integration.
+  # Verify the exact model slug against your account:
+  #   curl https://paradigm.lighton.ai/api/v2/models -H "Authorization: Bearer $LIGHTON_API_KEY"
+  - model_name: lighton-ocr
+    litellm_params:
+      model: openai/lighton-ocr-2
+      api_base: https://paradigm.lighton.ai/api/v2
+      api_key: os.environ/LIGHTON_API_KEY
+
+
+  # ── Scaleway Generative APIs (native LiteLLM provider) ───────────────────────
+  # Docs: https://www.scaleway.com/en/docs/generative-apis/
+  # Available models: https://www.scaleway.com/en/docs/generative-apis/reference-content/supported-models/
+
+  - model_name: scaleway-mistral
+    litellm_params:
+      model: scaleway/mistral-small-3.2-24b-instruct-2506
+      api_key: os.environ/SCW_SECRET_KEY
+
+  - model_name: scaleway-pixtral            # Vision / multimodal — also usable for OCR
+    litellm_params:
+      model: scaleway/pixtral-12b-2501
+      api_key: os.environ/SCW_SECRET_KEY
+
+  - model_name: scaleway-embeddings
+    litellm_params:
+      model: scaleway/bge-multilingual-gemma2
+      api_key: os.environ/SCW_SECRET_KEY
+
+
+  # ── Infomaniak AI (OpenAI-compatible) ────────────────────────────────────────
+  # The api_base is set via INFOMANIAK_API_BASE in .env because the URL embeds
+  # your personal product ID. List available models with:
+  #   curl https://api.infomaniak.com/1/ai/models -H "Authorization: Bearer $INFOMANIAK_API_KEY"
+
+  - model_name: infomaniak-chat             # Chat LLM — exact model slug may vary
+    litellm_params:
+      model: openai/mixtral
+      api_base: os.environ/INFOMANIAK_API_BASE
+      api_key: os.environ/INFOMANIAK_API_KEY
+
+  - model_name: infomaniak-whisper          # Audio transcription
+    litellm_params:
+      model: openai/whisper-1
+      api_base: os.environ/INFOMANIAK_API_BASE
+      api_key: os.environ/INFOMANIAK_API_KEY
+
+
+litellm_settings:
+  drop_params: true           # Ignore unsupported parameters instead of returning an error
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

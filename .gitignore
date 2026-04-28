@@ -1,0 +1,19 @@
+# Environment variables — never commit secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# macOS
+.DS_Store
+
+# Runtime data (Postgres bind mount)
+data/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
