@@ -1,6 +1,6 @@
 # litellm-european-proxy
 
-A Docker-based [LiteLLM](https://github.com/BerriAI/litellm) proxy that aggregates three European AI providers behind a single OpenAI-compatible API endpoint. Designed for use with [paperless-gpt](https://github.com/icereed/paperless-gpt) and similar tools that require an OCR or LLM backend.
+A Docker-based [LiteLLM](https://github.com/BerriAI/litellm) proxy that aggregates two European AI providers behind a single OpenAI-compatible API endpoint. Designed for use with [paperless-gpt](https://github.com/icereed/paperless-gpt) and similar tools that require an OCR or LLM backend.
 
 **Author:** Dr. Henning Dickten ([@hensing](https://github.com/hensing))
 **License:** MIT
@@ -12,11 +12,11 @@ A Docker-based [LiteLLM](https://github.com/BerriAI/litellm) proxy that aggregat
 | Model name (proxy) | Provider | Underlying model | Use case |
 |--------------------|----------|------------------|----------|
 | `lighton-ocr` | [LightOn](https://lighton.ai) | LightOnOCR2 | Document OCR — **primary paperless-gpt endpoint** |
-| `scaleway-mistral` | [Scaleway](https://www.scaleway.com/en/generative-apis/) | Mistral Small 3.2 24B | Chat / text generation |
-| `scaleway-pixtral` | Scaleway | Pixtral 12B | Vision / multimodal |
-| `scaleway-embeddings` | Scaleway | BGE Multilingual Gemma2 | Embeddings |
-| `infomaniak-chat` | [Infomaniak](https://www.infomaniak.com/en/hosting/ai-tools) | Mixtral | Chat / text generation |
-| `infomaniak-whisper` | Infomaniak | Whisper | Audio transcription |
+| `mistral-small` | [Mistral AI](https://mistral.ai) | Mistral Small 4 | Tagging, classification, n8n, paperless-gpt |
+| `mistral-large` | Mistral AI | Mistral Large 3 | Complex reasoning, best-in-class quality |
+| `mistral-embed` | Mistral AI | mistral-embed | Multilingual embeddings |
+| `mistral-tts` | Mistral AI | Voxtral TTS | Text-to-speech — EN + DE |
+| `mistral-stt` | Mistral AI | Voxtral Mini Transcribe V2 | Speech-to-text — EN + DE (batch) |
 
 All providers are OpenAI-compatible — no custom Python adapter is required.
 
@@ -60,19 +60,8 @@ Copy `.env.example` to `.env` and set the following:
 | Variable | Description |
 |----------|-------------|
 | `LIGHTON_API_KEY` | API key from [paradigm.lighton.ai](https://paradigm.lighton.ai) |
-| `SCW_SECRET_KEY` | Scaleway IAM secret key from the [Scaleway console](https://console.scaleway.com) |
-| `INFOMANIAK_API_BASE` | Full base URL including your product ID — see note below |
-| `INFOMANIAK_API_KEY` | API token from [Infomaniak Manager](https://manager.infomaniak.com) |
+| `MISTRAL_API_KEY` | API key from [console.mistral.ai](https://console.mistral.ai) → API Keys |
 | `LITELLM_MASTER_KEY` | Any secret string — clients use this as the Bearer token |
-
-**Infomaniak product ID:** The Infomaniak AI API endpoint embeds a per-account product ID:
-```
-https://api.infomaniak.com/2/ai/<YOUR_PRODUCT_ID>/openai/v1
-```
-Find your product ID in Infomaniak Manager under your AI product and set:
-```
-INFOMANIAK_API_BASE=https://api.infomaniak.com/2/ai/12345/openai/v1
-```
 
 ### Model names
 
@@ -83,13 +72,9 @@ Model slugs (the identifier sent to the upstream provider) are configured in `co
 curl https://paradigm.lighton.ai/api/v2/models \
   -H "Authorization: Bearer $LIGHTON_API_KEY"
 
-# Scaleway
-curl https://api.scaleway.ai/v1/models \
-  -H "Authorization: Bearer $SCW_SECRET_KEY"
-
-# Infomaniak
-curl https://api.infomaniak.com/1/ai/models \
-  -H "Authorization: Bearer $INFOMANIAK_API_KEY"
+# Mistral
+curl https://api.mistral.ai/v1/models \
+  -H "Authorization: Bearer $MISTRAL_API_KEY"
 ```
 
 ---
@@ -106,7 +91,7 @@ OPENAI_API_KEY: your_master_key_here      # value of LITELLM_MASTER_KEY
 OPENAI_BASE_URL: http://localhost:4000/v1 # or your server's address
 ```
 
-The `lighton-ocr` model routes to **LightOnOCR2**, a multilingual vision-language model optimised for document OCR. For a Scaleway alternative, `scaleway-pixtral` (Pixtral 12B) also supports vision input.
+The `lighton-ocr` model routes to **LightOnOCR2**, a multilingual vision-language model optimised for document OCR. For tagging and metadata generation, pair it with `mistral-small`.
 
 ---
 
@@ -147,37 +132,53 @@ curl http://localhost:4000/v1/chat/completions \
   }'
 ```
 
-### Chat (Scaleway Mistral)
+### Chat / Tagging (Mistral Small)
 
 ```bash
 curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer your_master_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "scaleway-mistral",
-    "messages": [{"role": "user", "content": "Hello, how are you?"}]
+    "model": "mistral-small",
+    "messages": [{"role": "user", "content": "Classify this document: invoice from Acme Corp, dated 2024-01-15."}],
+    "response_format": {"type": "json_object"}
   }'
 ```
 
-### Embeddings (Scaleway)
+### Embeddings (Mistral)
 
 ```bash
 curl http://localhost:4000/v1/embeddings \
   -H "Authorization: Bearer your_master_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "scaleway-embeddings",
+    "model": "mistral-embed",
     "input": "The quick brown fox jumps over the lazy dog"
   }'
 ```
 
-### Audio transcription (Infomaniak Whisper)
+### Speech-to-text (Voxtral Transcribe V2)
 
 ```bash
 curl http://localhost:4000/v1/audio/transcriptions \
   -H "Authorization: Bearer your_master_key" \
-  -F "model=infomaniak-whisper" \
-  -F "file=@recording.mp3"
+  -F "model=mistral-stt" \
+  -F "file=@recording.mp3" \
+  -F "language=de"
+```
+
+### Text-to-speech (Voxtral TTS)
+
+```bash
+curl http://localhost:4000/v1/audio/speech \
+  -H "Authorization: Bearer your_master_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "mistral-tts",
+    "input": "Hallo, wie geht es Ihnen?",
+    "voice": "alloy"
+  }' \
+  --output speech.mp3
 ```
 
 ---
@@ -250,8 +251,8 @@ docker compose logs litellm
 **Model returns 404 / unknown model:**
 The model slug sent to the upstream provider may differ from the assumed value. Query the provider's `/models` endpoint (see [Configuration](#configuration)) and update `config/litellm_config.yaml` accordingly, then restart with `docker compose restart`.
 
-**Infomaniak requests fail:**
-Confirm that `INFOMANIAK_API_BASE` contains your actual numeric product ID — not the placeholder `YOUR_PRODUCT_ID`.
+**Voxtral audio model returns 404:**
+The model slug for Voxtral TTS/STT is versioned (e.g. `voxtral-tts-26-03`). Query `https://api.mistral.ai/v1/models` to get the current list and update `config/litellm_config.yaml` if a newer version was released.
 
 ---
 

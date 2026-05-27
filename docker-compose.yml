@@ -1,32 +1,52 @@
 services:
 
+  # ── Ollama — local model runtime ───────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama
+    container_name: litellm-ollama
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks:
+      - litellm          # internal backend — litellm ↔ ollama only
+    restart: unless-stopped
+    # GPU support (optional, NVIDIA): uncomment the deploy block below
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
   # ── LiteLLM Proxy ─────────────────────────────────────────────────────────────
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
-    # Port 4000 is intentionally not bound to the host.
+    container_name: litellm-proxy
     # Nginx Proxy Manager reaches this container via the shared "proxy" network
     # using the service name as hostname: http://litellm:4000
-    #
-    # For local testing without a reverse proxy, temporarily uncomment:
-    # ports:
-    #   - "127.0.0.1:4000:4000"
+    #ports:
+    #  - "127.0.0.1:4000:4000"   # localhost-only — for debugging; remove in production
+    environment:
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@postgres:5432/litellm
     volumes:
       - ./config/litellm_config.yaml:/app/config.yaml:ro
     env_file:
       - .env
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     networks:
-      - proxy           # shared with Nginx Proxy Manager
-      - internal        # isolated backend communication
+      - litellm          # isolated backend — litellm ↔ postgres only
+      - proxy             # shared with Nginx Proxy Manager → http://litellm:4000
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 40s
     restart: unless-stopped
 
   # ── PostgreSQL — required for virtual keys & cost tracking ────────────────────
@@ -34,14 +54,26 @@ services:
   # Data is persisted in a named Docker volume.
   postgres:
     image: postgres:16-alpine
+    container_name: litellm-postgres
     environment:
       POSTGRES_DB: litellm
       POSTGRES_USER: litellm
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # RAM-optimised for a small proxy workload (~50 MB total)
+    command: >
+      postgres
+        -c shared_buffers=32MB
+        -c work_mem=4MB
+        -c maintenance_work_mem=16MB
+        -c effective_cache_size=64MB
+        -c max_connections=20
+        -c wal_level=minimal
+        -c max_wal_senders=0
+        -c checkpoint_completion_target=0.9
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     networks:
-      - internal        # not exposed to NPM — only litellm needs to reach it
+      - litellm
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
       interval: 10s
@@ -51,10 +83,9 @@ services:
     restart: unless-stopped
 
 networks:
+  litellm:
   proxy:
-    external: true      # must already exist — created by Nginx Proxy Manager
-  internal:
-    internal: true      # no external connectivity; used only for litellm ↔ postgres
+    external: true        # must already exist — created by Nginx Proxy Manager
 
 # Data directory ./data/postgres is created automatically on first start.
 # It is excluded from version control via .gitignore.

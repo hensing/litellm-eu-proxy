@@ -1,53 +1,49 @@
 model_list:
 
-  # ── LightOn ──────────────────────────────────────────────────────────────────
-  # LightOnOCR2: multilingual vision-language model optimised for document OCR.
-  # Primary endpoint for paperless-gpt integration.
-  # Verify the exact model slug against your account:
-  #   curl https://paradigm.lighton.ai/api/v2/models -H "Authorization: Bearer $LIGHTON_API_KEY"
+  # ── LightOnOCR-2 (self-hosted via Ollama) ────────────────────────────────────
+  # 1B vision-language model optimised for document OCR, running locally.
+  # Pull once after first start:
+  #   docker exec litellm-ollama ollama pull maternion/LightOnOCR-2
   - model_name: lighton-ocr
     litellm_params:
-      model: openai/lighton-ocr-2
-      api_base: https://paradigm.lighton.ai/api/v2
-      api_key: os.environ/LIGHTON_API_KEY
+      model: ollama_chat/maternion/LightOnOCR-2
+      api_base: http://ollama:11434
 
 
-  # ── Scaleway Generative APIs (native LiteLLM provider) ───────────────────────
-  # Docs: https://www.scaleway.com/en/docs/generative-apis/
-  # Available models: https://www.scaleway.com/en/docs/generative-apis/reference-content/supported-models/
+  # ── Mistral AI ────────────────────────────────────────────────────────────────
+  # Docs:    https://docs.mistral.ai/models/overview
+  # Pricing: https://mistral.ai/pricing
+  # API key: https://console.mistral.ai → API Keys
 
-  - model_name: scaleway-mistral
+  - model_name: mistral-small           # Tagging, n8n, paperless-gpt — Preis-Leistung
+    litellm_params:                     # Mistral Small 4 · $0.15/$0.60 per M tokens
+      model: mistral/mistral-small-latest
+      api_key: os.environ/MISTRAL_API_KEY
+
+  - model_name: mistral-large           # Best-in-class für komplexere Aufgaben
+    litellm_params:                     # Mistral Large 3 · $0.50/$1.50 per M tokens
+      model: mistral/mistral-large-latest
+      api_key: os.environ/MISTRAL_API_KEY
+
+  - model_name: mistral-embed           # Multilingual embeddings
     litellm_params:
-      model: scaleway/mistral-small-3.2-24b-instruct-2506
-      api_key: os.environ/SCW_SECRET_KEY
+      model: mistral/mistral-embed
+      api_key: os.environ/MISTRAL_API_KEY
 
-  - model_name: scaleway-pixtral            # Vision / multimodal — also usable for OCR
+  # Voxtral Audio — OpenAI-compatible endpoints on Mistral's API base
+  # Verify slugs: curl https://api.mistral.ai/v1/models -H "Authorization: Bearer $MISTRAL_API_KEY"
+
+  - model_name: mistral-tts             # Voxtral TTS · EN + DE · $0.016/1k chars
     litellm_params:
-      model: scaleway/pixtral-12b-2501
-      api_key: os.environ/SCW_SECRET_KEY
+      model: openai/voxtral-tts-26-03
+      api_base: https://api.mistral.ai/v1
+      api_key: os.environ/MISTRAL_API_KEY
 
-  - model_name: scaleway-embeddings
+  - model_name: mistral-stt             # Voxtral Transcribe V2 · EN + DE · $0.003/min (batch)
     litellm_params:
-      model: scaleway/bge-multilingual-gemma2
-      api_key: os.environ/SCW_SECRET_KEY
-
-
-  # ── Infomaniak AI (OpenAI-compatible) ────────────────────────────────────────
-  # The api_base is set via INFOMANIAK_API_BASE in .env because the URL embeds
-  # your personal product ID. List available models with:
-  #   curl https://api.infomaniak.com/1/ai/models -H "Authorization: Bearer $INFOMANIAK_API_KEY"
-
-  - model_name: infomaniak-chat             # Chat LLM — exact model slug may vary
-    litellm_params:
-      model: openai/mixtral
-      api_base: os.environ/INFOMANIAK_API_BASE
-      api_key: os.environ/INFOMANIAK_API_KEY
-
-  - model_name: infomaniak-whisper          # Audio transcription
-    litellm_params:
-      model: openai/whisper-1
-      api_base: os.environ/INFOMANIAK_API_BASE
-      api_key: os.environ/INFOMANIAK_API_KEY
+      model: openai/voxtral-mini-transcribe-26-02
+      api_base: https://api.mistral.ai/v1
+      api_key: os.environ/MISTRAL_API_KEY
 
 
 litellm_settings:
@@ -55,3 +51,6 @@ litellm_settings:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+  proxy_server_url: os.environ/LITELLM_PROXY_URL
+  alerting:
+    - email
