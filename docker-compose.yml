@@ -4,6 +4,10 @@ services:
   ollama:
     image: ollama/ollama
     container_name: litellm-ollama
+    environment:
+      OLLAMA_NUM_PARALLEL: 1        # one request at a time — keeps RAM flat
+      OLLAMA_MAX_LOADED_MODELS: 1   # unload previous model before loading a new one
+      OLLAMA_KEEP_ALIVE: 5m         # unload model from RAM after 5 min idle
     volumes:
       - ./data/ollama:/root/.ollama
     networks:
